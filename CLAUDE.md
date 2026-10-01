@@ -19,4 +19,5 @@ Three files: `index.html` (DOM + two canvases), `style.css`, and `game.js` (all 
 - The `requestAnimationFrame` `loop` accumulates time and drops the piece when `dropAccum >= dropInterval`. Pause and game over stop it with `cancelAnimationFrame(animId)`; unpausing restarts it by calling `loop` directly.
 - Piece lifecycle: `lockPiece()` = `merge()` -> `clearLines()` -> `spawn()`. `spawn()` calls `endGame()` if the new piece collides immediately.
 - Canvas size is hardcoded in `index.html` (`300x600` board, `120x120` next). If you change `COLS`, `ROWS` or `BLOCK` in `game.js`, update those attributes to match.
+- Theming: colors are CSS variables in `style.css` (`:root` = dark, `[data-theme="light"]` = light). `applyTheme()` in `game.js` sets `data-theme`, caches canvas colors (`--grid`, `--block-highlight`) in `themeColors`, and redraws manually (the loop is cancelled while paused/game over). An inline script in `<head>` sets the theme from `localStorage` before first paint. `init()` does not touch the theme.
 - Level/speed rules live in `clearLines()`: level = `floor(lines/10)+1`, `dropInterval = max(100, 1000 - (level-1)*90)`.

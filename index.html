@@ -7,10 +7,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem('theme') === 'light' ? 'light' : 'dark'; }
+    catch (e) { document.documentElement.dataset.theme = 'dark'; }
+  </script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="wrapper">
+    <button id="theme-toggle" class="theme-toggle" role="switch" aria-checked="false" aria-label="Modo claro">
+      <span>Modo claro</span><span class="track"></span>
+    </button>
     <h1 class="title">THETRIS</h1>
 
     <div class="game-container">
