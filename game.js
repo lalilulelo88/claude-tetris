@@ -18,6 +18,12 @@ const COLORS = [
   '#a1887f', // Y - brown
   '#fff176', // 1x1 - light yellow
   '#90a4ae', // 3x3 hueca - gray
+  '#ff5252', // bomba
+  '#ffeb3b', // rayo
+  '#e040fb', // tinte
+  '#69f0ae', // gravedad
+  '#40c4ff', // congelar
+  '#cfd8dc', // comodín
 ];
 
 const PIECES = [
@@ -34,7 +40,16 @@ const PIECES = [
   [[0,10,0,0],[10,10,10,10]],                 // Y (pentominó)
   [[11]],                                     // 1x1 (recompensa tras un Tetris)
   [[12,12,12],[12,0,12],[12,12,12]],          // 3x3 hueca (reto)
+  [[13]], [[14]], [[15]], [[16]], [[17]],      // power-ups 1x1: bomba, rayo, tinte, gravedad, congelar
 ];
+
+// 13-17 = power-ups (no se fusionan al tablero); WILD = bloque comodín en el tablero
+const POWER_TYPES = [13, 14, 15, 16, 17];
+const WILD = 18;
+const POWER_EVERY_LINES = 5;
+const FREEZE_MS = 5000;
+const ICONS = { 13: '💣', 14: '⚡', 15: '🎨', 16: '⬇️', 17: '❄️', 18: '✦' };
+const POWER_NAMES = { 13: 'BOMBA', 14: 'RAYO', 15: 'TINTE', 16: 'GRAVEDAD', 17: 'CONGELAR' };
 
 const SPECIAL_TYPES = [8, 9, 10, 12];
 const SPECIAL_CHANCE = 0.07;
@@ -64,7 +79,7 @@ const themeToggle = document.getElementById('theme-toggle');
 const themeColors = { grid: '', highlight: '', accent: '' };
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
-let hold, holdUsed, pendingSingle;
+let hold, holdUsed, pendingSingle, pendingPower, freezeLeft;
 let combo, b2b, lastRotate, flash, audioCtx;
 
 function createBoard() {
@@ -76,6 +91,10 @@ function randomPiece() {
 }
 
 function nextType() {
+  if (pendingPower) {
+    pendingPower = false;
+    return POWER_TYPES[Math.floor(Math.random() * POWER_TYPES.length)];
+  }
   if (pendingSingle) {
     pendingSingle = false;
     return 11;
@@ -96,7 +115,7 @@ function collide(shape, ox, oy) {
       const nx = ox + c;
       const ny = oy + r;
       if (nx < 0 || nx >= COLS || ny >= ROWS) return true;
-      if (ny >= 0 && board[ny][nx]) return true;
+      if (ny >= 0 && board[ny][nx] && board[ny][nx] !== WILD) return true;
     }
   }
   return false;
@@ -187,6 +206,7 @@ function scoreLock(cleared, tspin) {
     if (combo >= 2) { pts *= combo; labels.push('COMBO x' + combo); }
     if (board.every(row => row.every(v => !v))) { pts += PERFECT_CLEAR * level; labels.push('PERFECT CLEAR'); }
     lines += cleared;
+    if (Math.floor(lines / POWER_EVERY_LINES) > Math.floor((lines - cleared) / POWER_EVERY_LINES)) pendingPower = true;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     beep(300 + 100 * Math.min(combo, 8));
@@ -224,7 +244,45 @@ function softDrop() {
   }
 }
 
+function applyPower(type, x, y) {
+  if (type === 13) {
+    for (let r = y - 1; r <= y + 1; r++)
+      for (let c = x - 1; c <= x + 1; c++)
+        if (r >= 0 && r < ROWS && c >= 0 && c < COLS) board[r][c] = 0;
+  } else if (type === 14) {
+    if (Math.random() < 0.5) board[y].fill(0);
+    else for (let r = 0; r < ROWS; r++) board[r][x] = 0;
+  } else if (type === 15) {
+    const below = y + 1 < ROWS ? board[y + 1][x] : 0;
+    let color = below && below !== WILD ? below : 0;
+    if (!color) {
+      const count = {};
+      board.forEach(row => row.forEach(v => { if (v && v !== WILD) count[v] = (count[v] || 0) + 1; }));
+      color = +Object.keys(count).sort((a, b) => count[b] - count[a])[0] || 0;
+    }
+    if (color) board.forEach(row => row.forEach((v, c) => { if (v === color) row[c] = WILD; }));
+  } else if (type === 16) {
+    for (let c = 0; c < COLS; c++) {
+      const col = board.map(row => row[c]).filter(v => v);
+      for (let r = ROWS - 1; r >= 0; r--) board[r][c] = col.pop() || 0;
+    }
+  } else if (type === 17) {
+    freezeLeft = FREEZE_MS;
+  }
+}
+
+function lockPower() {
+  applyPower(current.type, current.x, current.y);
+  flash = { text: POWER_NAMES[current.type] + '  +50', left: FLASH_MS };
+  score += 50;
+  const cleared = clearLines();
+  if (cleared) scoreLock(cleared, false);
+  updateHUD();
+  spawn();
+}
+
 function lockPiece() {
+  if (POWER_TYPES.includes(current.type)) return lockPower();
   const tspin = isTSpin();
   merge();
   scoreLock(clearLines(), tspin);
@@ -274,6 +332,13 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   // highlight
   context.fillStyle = themeColors.highlight;
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (ICONS[colorIndex]) {
+    context.fillStyle = '#000';
+    context.font = `${Math.floor(size * 0.6)}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(ICONS[colorIndex], x * size + size / 2, y * size + size / 2 + 1);
+  }
   context.globalAlpha = 1;
 }
 
@@ -315,6 +380,14 @@ function draw() {
     for (let c = 0; c < current.shape[r].length; c++)
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
 
+  if (freezeLeft > 0) {
+    ctx.fillStyle = 'rgba(64, 196, 255, 0.12)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = COLORS[17];
+    ctx.font = "bold 14px 'Courier New', monospace";
+    ctx.textAlign = 'left';
+    ctx.fillText('❄ ' + (freezeLeft / 1000).toFixed(1) + 's', 6, 18);
+  }
   drawFlash();
 }
 
@@ -378,7 +451,8 @@ function togglePause() {
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
-  dropAccum += dt;
+  if (freezeLeft > 0) freezeLeft = Math.max(0, freezeLeft - dt);
+  else dropAccum += dt;
   if (flash && (flash.left -= dt) <= 0) flash = null;
   if (dropAccum >= dropInterval) {
     dropAccum = 0;
@@ -404,6 +478,8 @@ function init() {
   dropAccum = 0;
   hold = null;
   pendingSingle = false;
+  pendingPower = false;
+  freezeLeft = 0;
   combo = 0;
   b2b = false;
   lastRotate = false;
