@@ -108,7 +108,8 @@ const themeColors = { grid: '', highlight: '', accent: '' };
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, freezeLeft;
 let energy, slowLeft, peekLeft, undoSnap;
-let ignoreRepeat = false; // tras reanudar, ignora la tecla mantenida hasta su keyup
+const heldKeys = new Set();
+let ignoreKeys = new Set(); // al reanudar, ignora el repeat de las teclas ya mantenidas hasta su keyup
 let mode, levelBase, timeLeft, garbageLeft, revealLeft;
 let combo, b2b, lastRotate, flash, audioCtx;
 
@@ -585,7 +586,9 @@ function togglePause() {
   paused = !paused;
   pauseMenu.classList.toggle('hidden', !paused);
   if (!paused) {
-    ignoreRepeat = true;
+    ignoreKeys = new Set(heldKeys);
+    ignoreKeys.delete('KeyP');
+    ignoreKeys.delete('Escape');
     lastTime = performance.now();
     loop(lastTime);
   } else {
@@ -661,7 +664,8 @@ function init() {
 
 document.addEventListener('keydown', e => {
   if (!audioCtx) try { audioCtx = new AudioContext(); } catch (err) {}
-  if (e.repeat && ignoreRepeat) return;
+  heldKeys.add(e.code);
+  if (e.repeat && ignoreKeys.has(e.code)) return;
   if (!abilityMenu.classList.contains('hidden')) {
     const i = Number(e.key) - 1;
     if (ABILITY_KEYS[i]) chooseAbility(ABILITY_KEYS[i]);
@@ -699,7 +703,7 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
-document.addEventListener('keyup', e => { if (e.code !== 'KeyP' && e.code !== 'Escape') ignoreRepeat = false; });
+document.addEventListener('keyup', e => { heldKeys.delete(e.code); ignoreKeys.delete(e.code); });
 
 restartBtn.addEventListener('click', init);
 
