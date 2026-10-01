@@ -13,6 +13,11 @@ const COLORS = [
   '#e57373', // Z - red
   '#7986cb', // J - indigo
   '#ffb74d', // L - orange
+  '#f06292', // + - pink
+  '#4db6ac', // U - teal
+  '#a1887f', // Y - brown
+  '#fff176', // 1x1 - light yellow
+  '#90a4ae', // 3x3 hueca - gray
 ];
 
 const PIECES = [
@@ -24,7 +29,15 @@ const PIECES = [
   [[5,5,0],[0,5,5],[0,0,0]],                  // Z
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
+  [[0,8,0],[8,8,8],[0,8,0]],                  // + (pentominó)
+  [[9,0,9],[9,9,9]],                          // U (pentominó)
+  [[0,10,0,0],[10,10,10,10]],                 // Y (pentominó)
+  [[11]],                                     // 1x1 (recompensa tras un Tetris)
+  [[12,12,12],[12,0,12],[12,12,12]],          // 3x3 hueca (reto)
 ];
+
+const SPECIAL_TYPES = [8, 9, 10, 12];
+const SPECIAL_CHANCE = 0.07;
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
@@ -47,14 +60,23 @@ const themeToggle = document.getElementById('theme-toggle');
 const themeColors = { grid: '', highlight: '' };
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
-let hold, holdUsed;
+let hold, holdUsed, pendingSingle;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
 function randomPiece() {
-  return makePiece(Math.floor(Math.random() * 7) + 1);
+  return makePiece(nextType());
+}
+
+function nextType() {
+  if (pendingSingle) {
+    pendingSingle = false;
+    return 11;
+  }
+  if (Math.random() < SPECIAL_CHANCE) return SPECIAL_TYPES[Math.floor(Math.random() * SPECIAL_TYPES.length)];
+  return Math.floor(Math.random() * 7) + 1;
 }
 
 function makePiece(type) {
@@ -114,6 +136,7 @@ function clearLines() {
     }
   }
   if (cleared) {
+    if (cleared === 4) pendingSingle = true;
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
@@ -302,6 +325,7 @@ function init() {
   dropInterval = 1000;
   dropAccum = 0;
   hold = null;
+  pendingSingle = false;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
