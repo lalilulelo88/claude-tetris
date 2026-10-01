@@ -102,9 +102,19 @@
 
       <div id="overlay" class="overlay hidden">
         <div class="overlay-box">
-          <p id="overlay-title">GAME OVER</p>
+          <p id="overlay-title">THETRIS</p>
           <p id="overlay-score"></p>
-          <button id="restart-btn">Reiniciar</button>
+          <div id="records">
+            <form id="name-form" hidden>
+              <input id="name-input" maxlength="10" placeholder="Tu nombre" autocomplete="off" />
+              <button type="submit" class="menu-btn">Guardar</button>
+            </form>
+            <p class="menu-title">RECORDS</p>
+            <ol id="records-list"></ol>
+            <p id="records-extra" class="hint"></p>
+            <button id="reset-records" type="button" class="menu-btn">Borrar records</button>
+          </div>
+          <button id="restart-btn">Jugar</button>
         </div>
       </div>
     </div>
