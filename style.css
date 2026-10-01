@@ -116,6 +116,7 @@ body {
 }
 
 #hold-canvas,
+#peek-canvas,
 #next-canvas {
   display: block;
   border: 1px solid var(--border);
@@ -186,7 +187,8 @@ kbd {
   color: var(--accent);
 }
 
-#restart-btn {
+#restart-btn,
+.menu-btn {
   margin-top: 8px;
   background: var(--accent);
   color: var(--accent-contrast);
@@ -200,8 +202,56 @@ kbd {
   transition: background 0.15s;
 }
 
-#restart-btn:hover {
+#restart-btn:hover,
+.menu-btn:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+/* ---- Energía y habilidades ---- */
+.panel-section[hidden] {
+  display: none;
+}
+
+.energy {
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--board-bg);
+  overflow: hidden;
+}
+
+#energy-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--accent);
+  min-height: 14px;
+}
+
+.menu-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--accent);
+}
+
+.menu-btn {
+  width: 290px;
+  margin-top: 0;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ---- Toggle de tema ---- */

@@ -58,6 +58,12 @@ const LINE_SCORES = [0, 100, 300, 500, 800];
 const TSPIN_SCORES = [400, 800, 1200, 1600];
 const PERFECT_CLEAR = 2000;
 const FLASH_MS = 1200;
+const ENERGY_MAX = 100;
+const ENERGY_PER_LINE = 10;
+const ABILITY_MS = 10000;
+const QUEUE_LEN = 6;
+// orden = teclas 1-5 del menú
+const ABILITY_KEYS = ['peek', 'swap', 'slow', 'undo', 'hold'];
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -67,6 +73,12 @@ const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
 const comboEl = document.getElementById('combo');
+const energyFill = document.getElementById('energy-fill');
+const energyHint = document.getElementById('energy-hint');
+const peekSection = document.getElementById('peek-section');
+const peekCanvas = document.getElementById('peek-canvas');
+const peekCtx = peekCanvas.getContext('2d');
+const abilityMenu = document.getElementById('ability-menu');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
@@ -78,27 +90,25 @@ const holdCtx = holdCanvas.getContext('2d');
 const themeToggle = document.getElementById('theme-toggle');
 const themeColors = { grid: '', highlight: '', accent: '' };
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
-let hold, holdUsed, pendingSingle, pendingPower, freezeLeft;
+let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let hold, holdUsed, freezeLeft;
+let energy, slowLeft, peekLeft, undoSnap;
 let combo, b2b, lastRotate, flash, audioCtx;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
-function randomPiece() {
-  return makePiece(nextType());
+function randomPower() {
+  return POWER_TYPES[Math.floor(Math.random() * POWER_TYPES.length)];
+}
+
+// la recompensa entra como la siguiente pieza visible (queue[0] es la que está por salir)
+function queueReward(type) {
+  queue.splice(1, 0, type);
 }
 
 function nextType() {
-  if (pendingPower) {
-    pendingPower = false;
-    return POWER_TYPES[Math.floor(Math.random() * POWER_TYPES.length)];
-  }
-  if (pendingSingle) {
-    pendingSingle = false;
-    return 11;
-  }
   if (Math.random() < SPECIAL_CHANCE) return SPECIAL_TYPES[Math.floor(Math.random() * SPECIAL_TYPES.length)];
   return Math.floor(Math.random() * 7) + 1;
 }
@@ -199,14 +209,15 @@ function scoreLock(cleared, tspin) {
     const difficult = cleared === 4 || tspin;
     pts = (tspin ? TSPIN_SCORES[cleared] : LINE_SCORES[cleared]) * level;
     if (tspin) labels.push('T-SPIN');
-    if (cleared === 4) { labels.push('TETRIS'); pendingSingle = true; }
+    if (cleared === 4) { labels.push('TETRIS'); queueReward(11); }
     if (difficult && b2b) { pts = Math.floor(pts * 1.5); labels.push('B2B'); }
     b2b = difficult;
     combo++;
     if (combo >= 2) { pts *= combo; labels.push('COMBO x' + combo); }
     if (board.every(row => row.every(v => !v))) { pts += PERFECT_CLEAR * level; labels.push('PERFECT CLEAR'); }
     lines += cleared;
-    if (Math.floor(lines / POWER_EVERY_LINES) > Math.floor((lines - cleared) / POWER_EVERY_LINES)) pendingPower = true;
+    if (Math.floor(lines / POWER_EVERY_LINES) > Math.floor((lines - cleared) / POWER_EVERY_LINES)) queueReward(randomPower());
+    energy = Math.min(ENERGY_MAX, energy + cleared * ENERGY_PER_LINE);
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     beep(300 + 100 * Math.min(combo, 8));
@@ -282,6 +293,7 @@ function lockPower() {
 }
 
 function lockPiece() {
+  undoSnap = structuredClone({ board, current, queue, score, lines, level, dropInterval, combo, b2b, hold, holdUsed });
   if (POWER_TYPES.includes(current.type)) return lockPower();
   const tspin = isTSpin();
   merge();
@@ -290,8 +302,8 @@ function lockPiece() {
 }
 
 function spawn() {
-  current = next;
-  next = randomPiece();
+  current = makePiece(queue.shift());
+  queue.push(nextType());
   holdUsed = false;
   lastRotate = false;
   if (collide(current.shape, current.x, current.y)) {
@@ -321,6 +333,8 @@ function updateHUD() {
   linesEl.textContent = lines;
   levelEl.textContent = level;
   comboEl.textContent = combo > 1 ? 'x' + combo : '-';
+  energyFill.style.width = (energy / ENERGY_MAX) * 100 + '%';
+  energyHint.textContent = energy >= ENERGY_MAX ? '¡Lista! Pulsa Q' : '';
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
@@ -418,12 +432,73 @@ function drawPreview(context, cnv, piece, alpha) {
 }
 
 function drawNext() {
-  drawPreview(nextCtx, nextCanvas, next);
+  drawPreview(nextCtx, nextCanvas, makePiece(queue[0]));
 }
 
 // slot atenuado mientras el hold está bloqueado en este turno
 function drawHold() {
   drawPreview(holdCtx, holdCanvas, hold && makePiece(hold), holdUsed ? 0.35 : 1);
+}
+
+function drawPeek() {
+  const SZ = 14;
+  peekCtx.clearRect(0, 0, peekCanvas.width, peekCanvas.height);
+  queue.slice(0, 5).forEach((type, i) => {
+    const shape = PIECES[type];
+    const offX = Math.floor((5 - shape[0].length) / 2);
+    const offY = i * 3 + Math.floor((3 - shape.length) / 2);
+    shape.forEach((row, r) => row.forEach((v, c) => drawBlock(peekCtx, offX + c, offY + r, v, SZ)));
+  });
+}
+
+function openAbilityMenu() {
+  if (energy < ENERGY_MAX || paused || gameOver) return;
+  paused = true;
+  cancelAnimationFrame(animId);
+  abilityMenu.querySelector('[data-ability="undo"]').disabled = !undoSnap;
+  abilityMenu.querySelector('[data-ability="hold"]').disabled = !holdUsed;
+  abilityMenu.classList.remove('hidden');
+}
+
+function closeAbilityMenu() {
+  abilityMenu.classList.add('hidden');
+  paused = false;
+  lastTime = performance.now();
+  loop(lastTime);
+}
+
+// devuelve false si no se puede aplicar (no gasta energía)
+function applyAbility(name) {
+  if (name === 'peek') {
+    peekLeft = ABILITY_MS;
+  } else if (name === 'swap') {
+    let type;
+    do type = Math.floor(Math.random() * 7) + 1; while (type === current.type);
+    const piece = makePiece(type);
+    if (collide(piece.shape, current.x, current.y)) return false;
+    piece.x = current.x;
+    piece.y = current.y;
+    current = piece;
+  } else if (name === 'slow') {
+    slowLeft = ABILITY_MS;
+  } else if (name === 'undo') {
+    if (!undoSnap) return false;
+    ({ board, current, queue, score, lines, level, dropInterval, combo, b2b, hold, holdUsed } = undoSnap);
+    undoSnap = null;
+    drawNext();
+  } else if (name === 'hold') {
+    if (!holdUsed) return false;
+    holdUsed = false;
+  }
+  return true;
+}
+
+function chooseAbility(name) {
+  if (!applyAbility(name)) { beep(200, 0.15); return; }
+  energy = 0;
+  drawHold();
+  updateHUD();
+  closeAbilityMenu();
 }
 
 function endGame() {
@@ -453,8 +528,12 @@ function loop(ts) {
   lastTime = ts;
   if (freezeLeft > 0) freezeLeft = Math.max(0, freezeLeft - dt);
   else dropAccum += dt;
+  if (slowLeft > 0) slowLeft = Math.max(0, slowLeft - dt);
+  const showPeek = peekLeft > 0;
+  if (showPeek) { peekLeft = Math.max(0, peekLeft - dt); drawPeek(); }
+  peekSection.hidden = !showPeek;
   if (flash && (flash.left -= dt) <= 0) flash = null;
-  if (dropAccum >= dropInterval) {
+  if (dropAccum >= (slowLeft > 0 ? dropInterval * 2 : dropInterval)) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
@@ -477,24 +556,35 @@ function init() {
   dropInterval = 1000;
   dropAccum = 0;
   hold = null;
-  pendingSingle = false;
-  pendingPower = false;
   freezeLeft = 0;
+  energy = 0;
+  slowLeft = 0;
+  peekLeft = 0;
+  undoSnap = null;
   combo = 0;
   b2b = false;
   lastRotate = false;
   flash = null;
   lastTime = performance.now();
-  next = randomPiece();
+  queue = Array.from({ length: QUEUE_LEN }, nextType);
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  abilityMenu.classList.add('hidden');
+  peekSection.hidden = true;
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
   if (!audioCtx) try { audioCtx = new AudioContext(); } catch (err) {}
+  if (!abilityMenu.classList.contains('hidden')) {
+    const i = Number(e.key) - 1;
+    if (ABILITY_KEYS[i]) chooseAbility(ABILITY_KEYS[i]);
+    else if (e.code === 'Escape' || e.code === 'KeyQ') closeAbilityMenu();
+    return;
+  }
+  if (e.code === 'KeyQ') { openAbilityMenu(); return; }
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -525,6 +615,14 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', init);
+
+abilityMenu.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  btn.blur();
+  if (btn.dataset.ability) chooseAbility(btn.dataset.ability);
+  else closeAbilityMenu();
+});
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;

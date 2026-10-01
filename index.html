@@ -30,6 +30,15 @@
           <span class="label">COMBO</span>
           <span class="value" id="combo">-</span>
         </div>
+        <div class="panel-section">
+          <span class="label">ENERGÍA</span>
+          <div class="energy"><div id="energy-fill"></div></div>
+          <span class="hint" id="energy-hint"></span>
+        </div>
+        <div class="panel-section" id="peek-section" hidden>
+          <span class="label">PRÓXIMAS</span>
+          <canvas id="peek-canvas" width="70" height="210"></canvas>
+        </div>
       </aside>
 
       <canvas id="board" width="300" height="600"></canvas>
@@ -61,10 +70,23 @@
             <li><kbd>↓</kbd> bajar</li>
             <li><kbd>Space</kbd> caída</li>
             <li><kbd>C</kbd><kbd>Shift</kbd> reservar</li>
+            <li><kbd>Q</kbd> habilidad</li>
             <li><kbd>P</kbd> pausa</li>
           </ul>
         </div>
       </aside>
+
+      <div id="ability-menu" class="overlay hidden">
+        <div class="overlay-box">
+          <p class="menu-title">HABILIDAD</p>
+          <button class="menu-btn" data-ability="peek"><kbd>1</kbd> Ver 5 siguientes (10s)</button>
+          <button class="menu-btn" data-ability="swap"><kbd>2</kbd> Cambiar pieza actual</button>
+          <button class="menu-btn" data-ability="slow"><kbd>3</kbd> Ralentizar (10s)</button>
+          <button class="menu-btn" data-ability="undo"><kbd>4</kbd> Deshacer colocación</button>
+          <button class="menu-btn" data-ability="hold"><kbd>5</kbd> Reserva extra</button>
+          <button class="menu-btn" data-cancel><kbd>Esc</kbd> Cancelar</button>
+        </div>
+      </div>
 
       <div id="overlay" class="overlay hidden">
         <div class="overlay-box">
