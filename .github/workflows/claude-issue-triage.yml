@@ -1,0 +1,41 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude issue triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Repositorio: ${{ github.repository }}. Issue #${{ github.event.issue.number }} (evento: ${{ github.event.action }}).
+
+            1. Lee el issue con `gh issue view ${{ github.event.issue.number }}`.
+            2. Revisa el código del repo (game.js, index.html, style.css, CLAUDE.md) para entender el problema.
+            3. Obtén los labels existentes con `gh label list` y asigna los apropiados con
+               `gh issue edit ${{ github.event.issue.number }} --add-label "..."`. Solo usa labels existentes.
+            4. Escribe un diagnóstico en español con estas secciones:
+               - Resumen del problema
+               - Causa probable
+               - Archivos y funciones involucradas
+               - Propuesta de solución (pasos concretos)
+               - Riesgos / casos a probar
+            5. Publica el diagnóstico como comentario:
+               - Si el evento es `opened`: `gh issue comment ${{ github.event.issue.number }} --body-file diag.md`
+               - Si es `edited`: `gh issue comment ${{ github.event.issue.number }} --edit-last --body-file diag.md` (actualiza el diagnóstico anterior en vez de duplicarlo; si falla, crea uno nuevo).
+            No modifiques código ni abras PRs.
+          claude_args: '--allowedTools "Read,Glob,Grep,Write,Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh label list:*)"'
