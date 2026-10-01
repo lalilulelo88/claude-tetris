@@ -40,6 +40,9 @@ const SPECIAL_TYPES = [8, 9, 10, 12];
 const SPECIAL_CHANCE = 0.07;
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
+const TSPIN_SCORES = [400, 800, 1200, 1600];
+const PERFECT_CLEAR = 2000;
+const FLASH_MS = 1200;
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -48,6 +51,7 @@ const nextCtx = nextCanvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
+const comboEl = document.getElementById('combo');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
@@ -57,10 +61,11 @@ const holdCanvas = document.getElementById('hold-canvas');
 const holdCtx = holdCanvas.getContext('2d');
 
 const themeToggle = document.getElementById('theme-toggle');
-const themeColors = { grid: '', highlight: '' };
+const themeColors = { grid: '', highlight: '', accent: '' };
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, pendingSingle;
+let combo, b2b, lastRotate, flash, audioCtx;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -113,6 +118,7 @@ function tryRotate() {
     if (!collide(rotated, current.x + kick, current.y)) {
       current.shape = rotated;
       current.x += kick;
+      lastRotate = true;
       return;
     }
   }
@@ -135,14 +141,62 @@ function clearLines() {
       r++;
     }
   }
-  if (cleared) {
-    if (cleared === 4) pendingSingle = true;
+  return cleared;
+}
+
+function cellFilled(x, y) {
+  return x < 0 || x >= COLS || y >= ROWS || (y >= 0 && board[y][x] !== 0);
+}
+
+// regla de 3 esquinas: T, última acción fue rotar y >=3 de las 4 esquinas ocupadas
+function isTSpin() {
+  if (current.type !== 3 || !lastRotate) return false;
+  const { x, y } = current;
+  const corners = [[0, 0], [2, 0], [0, 2], [2, 2]];
+  return corners.filter(([dx, dy]) => cellFilled(x + dx, y + dy)).length >= 3;
+}
+
+function beep(freq, dur = 0.12) {
+  if (!audioCtx) return;
+  try {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.value = freq;
+    g.gain.value = 0.05;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + dur);
+  } catch (e) {}
+}
+
+function scoreLock(cleared, tspin) {
+  const labels = [];
+  let pts = 0;
+  if (!cleared) {
+    combo = 0;
+    if (tspin) { pts = TSPIN_SCORES[0] * level; labels.push('T-SPIN'); }
+  } else {
+    const difficult = cleared === 4 || tspin;
+    pts = (tspin ? TSPIN_SCORES[cleared] : LINE_SCORES[cleared]) * level;
+    if (tspin) labels.push('T-SPIN');
+    if (cleared === 4) { labels.push('TETRIS'); pendingSingle = true; }
+    if (difficult && b2b) { pts = Math.floor(pts * 1.5); labels.push('B2B'); }
+    b2b = difficult;
+    combo++;
+    if (combo >= 2) { pts *= combo; labels.push('COMBO x' + combo); }
+    if (board.every(row => row.every(v => !v))) { pts += PERFECT_CLEAR * level; labels.push('PERFECT CLEAR'); }
     lines += cleared;
-    score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
-    updateHUD();
+    beep(300 + 100 * Math.min(combo, 8));
   }
+  score += pts;
+  if (labels.length) {
+    flash = { text: labels.join(' + ') + '  +' + pts, left: FLASH_MS };
+    if (labels.length > 1 || tspin) beep(880, 0.2);
+  }
+  updateHUD();
 }
 
 function ghostY() {
@@ -154,6 +208,7 @@ function ghostY() {
 function hardDrop() {
   const gy = ghostY();
   score += (gy - current.y) * 2;
+  if (gy > current.y) lastRotate = false;
   current.y = gy;
   lockPiece();
 }
@@ -161,6 +216,7 @@ function hardDrop() {
 function softDrop() {
   if (!collide(current.shape, current.x, current.y + 1)) {
     current.y++;
+    lastRotate = false;
     score += 1;
     updateHUD();
   } else {
@@ -169,8 +225,9 @@ function softDrop() {
 }
 
 function lockPiece() {
+  const tspin = isTSpin();
   merge();
-  clearLines();
+  scoreLock(clearLines(), tspin);
   spawn();
 }
 
@@ -178,6 +235,7 @@ function spawn() {
   current = next;
   next = randomPiece();
   holdUsed = false;
+  lastRotate = false;
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
@@ -196,6 +254,7 @@ function holdPiece() {
   }
   hold = type;
   holdUsed = true;
+  lastRotate = false;
   drawHold();
 }
 
@@ -203,6 +262,7 @@ function updateHUD() {
   scoreEl.textContent = score.toLocaleString();
   linesEl.textContent = lines;
   levelEl.textContent = level;
+  comboEl.textContent = combo > 1 ? 'x' + combo : '-';
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
@@ -254,6 +314,22 @@ function draw() {
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+
+  drawFlash();
+}
+
+function drawFlash() {
+  if (!flash) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, flash.left / 400);
+  ctx.font = "bold 16px 'Courier New', monospace";
+  ctx.textAlign = 'center';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+  ctx.fillStyle = themeColors.accent;
+  ctx.strokeText(flash.text, canvas.width / 2, canvas.height / 3);
+  ctx.fillText(flash.text, canvas.width / 2, canvas.height / 3);
+  ctx.restore();
 }
 
 function drawPreview(context, cnv, piece, alpha) {
@@ -303,10 +379,12 @@ function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
   dropAccum += dt;
+  if (flash && (flash.left -= dt) <= 0) flash = null;
   if (dropAccum >= dropInterval) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
+      lastRotate = false;
     } else {
       lockPiece();
     }
@@ -326,6 +404,10 @@ function init() {
   dropAccum = 0;
   hold = null;
   pendingSingle = false;
+  combo = 0;
+  b2b = false;
+  lastRotate = false;
+  flash = null;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
@@ -336,14 +418,15 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (!audioCtx) try { audioCtx = new AudioContext(); } catch (err) {}
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
-      if (!collide(current.shape, current.x - 1, current.y)) current.x--;
+      if (!collide(current.shape, current.x - 1, current.y)) { current.x--; lastRotate = false; }
       break;
     case 'ArrowRight':
-      if (!collide(current.shape, current.x + 1, current.y)) current.x++;
+      if (!collide(current.shape, current.x + 1, current.y)) { current.x++; lastRotate = false; }
       break;
     case 'ArrowDown':
       softDrop();
@@ -373,6 +456,7 @@ function applyTheme(theme) {
   const styles = getComputedStyle(document.documentElement);
   themeColors.grid = styles.getPropertyValue('--grid').trim();
   themeColors.highlight = styles.getPropertyValue('--block-highlight').trim();
+  themeColors.accent = styles.getPropertyValue('--accent').trim();
   // el loop está cancelado en pausa/game over: repintar manualmente
   if (current) {
     draw();
