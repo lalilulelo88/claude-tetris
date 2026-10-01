@@ -4,28 +4,39 @@ const COLS = 10;
 const ROWS = 20;
 const BLOCK = 30;
 
-const COLORS = [
-  null,
-  '#4dd0e1', // I - cyan
-  '#ffd54f', // O - yellow
-  '#ba68c8', // T - purple
-  '#81c784', // S - green
-  '#e57373', // Z - red
-  '#7986cb', // J - indigo
-  '#ffb74d', // L - orange
-  '#f06292', // + - pink
-  '#4db6ac', // U - teal
-  '#a1887f', // Y - brown
-  '#fff176', // 1x1 - light yellow
-  '#90a4ae', // 3x3 hueca - gray
-  '#ff5252', // bomba
-  '#ffeb3b', // rayo
-  '#e040fb', // tinte
-  '#69f0ae', // gravedad
-  '#40c4ff', // congelar
-  '#cfd8dc', // comodín
-  '#757575', // basura / bloques pre-colocados
-];
+// paletas por skin (mismos índices que PIECES: 0 = null, 1-19)
+const SKINS = {
+  retro: { colors: [
+    null,
+    '#4dd0e1', '#ffd54f', '#ba68c8', '#81c784', '#e57373', '#7986cb', '#ffb74d', // I O T S Z J L
+    '#f06292', '#4db6ac', '#a1887f', '#fff176', '#90a4ae',                      // + U Y 1x1 3x3 hueca
+    '#ff5252', '#ffeb3b', '#e040fb', '#69f0ae', '#40c4ff',                      // bomba rayo tinte gravedad congelar
+    '#cfd8dc', '#757575',                                                       // comodín, basura
+  ] },
+  neon: { colors: [
+    null,
+    '#00f0ff', '#fff200', '#d500f9', '#39ff14', '#ff1744', '#536dfe', '#ff9100',
+    '#ff4081', '#1de9b6', '#c6a07a', '#ffff00', '#b0bec5',
+    '#ff1744', '#ffee00', '#ea00ff', '#00ff9c', '#00b0ff',
+    '#eceff1', '#607d8b',
+  ] },
+  pastel: { colors: [
+    null,
+    '#a8e6ef', '#fff1b8', '#d9b8e6', '#b9e4bc', '#f4b8b8', '#b8c0ee', '#fbd3a6',
+    '#f8bbd0', '#a6dcd6', '#d7c4bc', '#fff9c4', '#cfd8dc',
+    '#ff9e9e', '#fff59d', '#e1a8f0', '#a8f5cc', '#9bdcff',
+    '#eceff1', '#b0b0b0',
+  ] },
+  pixel: { colors: [
+    null,
+    '#29b6d1', '#f5c518', '#9c4dcc', '#4caf50', '#e53935', '#3f51b5', '#fb8c00',
+    '#d81b60', '#00897b', '#8d6e63', '#fdd835', '#78909c',
+    '#e53935', '#fbc02d', '#aa00ff', '#00c853', '#039be5',
+    '#b0bec5', '#616161',
+  ] },
+};
+let skin = 'retro';
+let COLORS = SKINS.retro.colors;
 
 const PIECES = [
   null,
@@ -100,6 +111,7 @@ const holdCanvas = document.getElementById('hold-canvas');
 const holdCtx = holdCanvas.getContext('2d');
 
 const themeToggle = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 const themeColors = { grid: '', highlight: '', accent: '' };
 
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
@@ -359,12 +371,36 @@ function updateHUD() {
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
   const color = COLORS[colorIndex];
+  const px = x * size + 1, py = y * size + 1, s = size - 2;
   context.globalAlpha = alpha ?? 1;
   context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = themeColors.highlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (skin === 'neon') {
+    context.shadowColor = color;
+    context.shadowBlur = size * 0.4;
+    context.fillRect(px + 1, py + 1, s - 2, s - 2);
+    context.shadowBlur = 0;
+    context.shadowColor = 'transparent';
+  } else if (skin === 'pastel') {
+    context.beginPath();
+    context.roundRect(px, py, s, s, size * 0.25);
+    context.fill();
+    context.fillStyle = themeColors.highlight;
+    context.beginPath();
+    context.roundRect(px + 3, py + 2, s - 6, 4, 2);
+    context.fill();
+  } else if (skin === 'pixel') {
+    context.fillRect(px, py, s, s);
+    // cuadrícula 3x3 de luces (arriba-izquierda) y sombras (abajo-derecha)
+    const u = s / 3;
+    context.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    [[0, 0], [1, 0], [0, 1]].forEach(([i, j]) => context.fillRect(px + i * u, py + j * u, u, u));
+    context.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    [[2, 1], [1, 2], [2, 2]].forEach(([i, j]) => context.fillRect(px + i * u, py + j * u, u, u));
+  } else {
+    context.fillRect(px, py, s, s);
+    context.fillStyle = themeColors.highlight;
+    context.fillRect(px, py, s, 4);
+  }
   if (ICONS[colorIndex]) {
     context.fillStyle = '#000';
     context.font = `${Math.floor(size * 0.6)}px sans-serif`;
@@ -732,6 +768,26 @@ themeToggle.addEventListener('click', () => {
   themeToggle.blur(); // evita que Space (caída) active el toggle
 });
 
+function applySkin(name) {
+  if (!SKINS[name]) name = 'retro';
+  skin = name;
+  COLORS = SKINS[name].colors;
+  document.documentElement.dataset.skin = name;
+  skinSelect.value = name;
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'); // relee --grid y repinta
+  if (current && peekLeft > 0) drawPeek();
+}
+
+skinSelect.addEventListener('change', () => {
+  try { localStorage.setItem('skin', skinSelect.value); } catch (e) {}
+  applySkin(skinSelect.value);
+  skinSelect.blur();
+});
+skinSelect.addEventListener('keydown', e => {
+  if (e.key.startsWith('Arrow') || e.code === 'Space') { e.preventDefault(); skinSelect.blur(); }
+});
+
 applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+applySkin(document.documentElement.dataset.skin);
 
 init();

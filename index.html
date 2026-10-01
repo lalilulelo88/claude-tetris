@@ -10,6 +10,8 @@
   <script>
     try { document.documentElement.dataset.theme = localStorage.getItem('theme') === 'light' ? 'light' : 'dark'; }
     catch (e) { document.documentElement.dataset.theme = 'dark'; }
+    try { document.documentElement.dataset.skin = localStorage.getItem('skin') || 'retro'; }
+    catch (e) { document.documentElement.dataset.skin = 'retro'; }
   </script>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -33,6 +35,15 @@
             <option value="inverse">Rotación inversa (nivel 5)</option>
           </select>
           <span class="hint" id="mode-info"></span>
+        </div>
+        <div class="panel-section">
+          <label class="label" for="skin-select">SKIN</label>
+          <select id="skin-select">
+            <option value="retro">Retro</option>
+            <option value="neon">Neon</option>
+            <option value="pastel">Pastel</option>
+            <option value="pixel">Pixel art</option>
+          </select>
         </div>
         <div class="panel-section">
           <span class="label">HOLD</span>

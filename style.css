@@ -38,6 +38,12 @@
   --block-highlight: rgba(255, 255, 255, 0.35);
 }
 
+/* neon: fondo negro en ambos temas (va después de los temas por especificidad) */
+[data-skin="neon"] {
+  --board-bg: #000;
+  --grid: #14142a;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -231,7 +237,8 @@ kbd {
   align-self: flex-start;
 }
 
-#mode-select {
+#mode-select,
+#skin-select {
   background: var(--kbd-bg);
   color: var(--text);
   border: 1px solid var(--kbd-border);
