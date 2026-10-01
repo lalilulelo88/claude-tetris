@@ -115,6 +115,7 @@ body {
   letter-spacing: 1px;
 }
 
+#hold-canvas,
 #next-canvas {
   display: block;
   border: 1px solid var(--border);
