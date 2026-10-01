@@ -4,10 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tetris</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="wrapper">
+    <h1 class="title">THETRIS</h1>
+
     <div class="game-container">
       <canvas id="board" width="300" height="600"></canvas>
 
@@ -41,13 +46,13 @@
           </ul>
         </div>
       </aside>
-    </div>
 
-    <div id="overlay" class="overlay hidden">
-      <div class="overlay-box">
-        <p id="overlay-title">GAME OVER</p>
-        <p id="overlay-score"></p>
-        <button id="restart-btn">Reiniciar</button>
+      <div id="overlay" class="overlay hidden">
+        <div class="overlay-box">
+          <p id="overlay-title">GAME OVER</p>
+          <p id="overlay-score"></p>
+          <button id="restart-btn">Reiniciar</button>
+        </div>
       </div>
     </div>
   </div>

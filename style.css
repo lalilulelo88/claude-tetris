@@ -19,7 +19,19 @@ body {
   position: relative;
 }
 
+.title {
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: 6px;
+  text-align: center;
+  color: #7aa2f7;
+  text-shadow: 3px 3px 0 #2a2a3a;
+  margin-bottom: 20px;
+}
+
 .game-container {
+  position: relative;
   display: flex;
   gap: 20px;
   align-items: flex-start;
