@@ -266,6 +266,45 @@ kbd {
   gap: 8px;
 }
 
+.pause-controls {
+  list-style: none;
+  width: 290px;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  border-radius: 6px;
+}
+
+.pause-controls[hidden] {
+  display: none;
+}
+
+.pause-controls li {
+  margin: 4px 0;
+}
+
+.pause-level {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 290px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+#start-level {
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 12px;
+}
+
 .menu-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;

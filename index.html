@@ -83,7 +83,7 @@
             <li><kbd>Space</kbd> caída</li>
             <li><kbd>C</kbd><kbd>Shift</kbd> reservar</li>
             <li><kbd>Q</kbd> habilidad</li>
-            <li><kbd>P</kbd> pausa</li>
+            <li><kbd>P</kbd><kbd>Esc</kbd> pausa</li>
           </ul>
         </div>
       </aside>
@@ -97,6 +97,33 @@
           <button class="menu-btn" data-ability="undo"><kbd>4</kbd> Deshacer colocación</button>
           <button class="menu-btn" data-ability="hold"><kbd>5</kbd> Reserva extra</button>
           <button class="menu-btn" data-cancel><kbd>Esc</kbd> Cancelar</button>
+        </div>
+      </div>
+
+      <div id="pause-menu" class="overlay hidden">
+        <div class="overlay-box">
+          <p class="menu-title">PAUSA</p>
+          <button class="menu-btn" data-pause="resume"><kbd>P</kbd> Reanudar</button>
+          <button class="menu-btn" data-pause="restart">Reiniciar</button>
+          <button class="menu-btn" data-pause="controls" aria-expanded="false">Ver controles</button>
+          <ul id="pause-controls" class="pause-controls" hidden>
+            <li><kbd>←</kbd><kbd>→</kbd> mover</li>
+            <li><kbd>↑</kbd><kbd>X</kbd> rotar</li>
+            <li><kbd>↓</kbd> bajar</li>
+            <li><kbd>Space</kbd> caída</li>
+            <li><kbd>C</kbd><kbd>Shift</kbd> reservar</li>
+            <li><kbd>Q</kbd> habilidad</li>
+            <li><kbd>P</kbd><kbd>Esc</kbd> pausa</li>
+          </ul>
+          <label class="pause-level">Nivel inicial
+            <select id="start-level">
+              <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+              <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+              <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+              <option value="10">10</option>
+            </select>
+          </label>
+          <span class="hint">El nivel inicial se aplica en la próxima partida</span>
         </div>
       </div>
 

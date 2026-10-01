@@ -91,6 +91,9 @@ const peekCtx = peekCanvas.getContext('2d');
 const abilityMenu = document.getElementById('ability-menu');
 const modeSelect = document.getElementById('mode-select');
 const modeInfo = document.getElementById('mode-info');
+const pauseMenu = document.getElementById('pause-menu');
+const pauseControls = document.getElementById('pause-controls');
+const startLevelSelect = document.getElementById('start-level');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
@@ -105,6 +108,8 @@ const themeColors = { grid: '', highlight: '', accent: '' };
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, freezeLeft;
 let energy, slowLeft, peekLeft, undoSnap;
+const heldKeys = new Set();
+let ignoreKeys = new Set(); // al reanudar, ignora el repeat de las teclas ya mantenidas hasta su keyup
 let mode, levelBase, timeLeft, garbageLeft, revealLeft;
 let combo, b2b, lastRotate, flash, audioCtx;
 
@@ -579,14 +584,15 @@ function endGame(title = 'GAME OVER', win = false) {
 function togglePause() {
   if (gameOver) return;
   paused = !paused;
+  pauseMenu.classList.toggle('hidden', !paused);
   if (!paused) {
+    ignoreKeys = new Set(heldKeys);
+    ignoreKeys.delete('KeyP');
+    ignoreKeys.delete('Escape');
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
   }
 }
 
@@ -618,6 +624,7 @@ function loop(ts) {
 function init() {
   mode = modeSelect.value;
   levelBase = mode === 'inverse' ? INVERSE_LEVEL_BASE : 0;
+  levelBase += Number(startLevelSelect.value) - 1;
   timeLeft = SPRINT_MS;
   garbageLeft = GARBAGE_MS;
   revealLeft = 0;
@@ -646,6 +653,8 @@ function init() {
   updateHUD();
   overlay.classList.add('hidden');
   abilityMenu.classList.add('hidden');
+  pauseMenu.classList.add('hidden');
+  pauseControls.hidden = true;
   overlayTitle.classList.remove('win');
   peekSection.hidden = true;
   updateModeInfo();
@@ -655,14 +664,17 @@ function init() {
 
 document.addEventListener('keydown', e => {
   if (!audioCtx) try { audioCtx = new AudioContext(); } catch (err) {}
+  heldKeys.add(e.code);
+  if (e.repeat && ignoreKeys.has(e.code)) return;
   if (!abilityMenu.classList.contains('hidden')) {
     const i = Number(e.key) - 1;
     if (ABILITY_KEYS[i]) chooseAbility(ABILITY_KEYS[i]);
     else if (e.code === 'Escape' || e.code === 'KeyQ') closeAbilityMenu();
     return;
   }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
+  if (!pauseMenu.classList.contains('hidden')) return;
   if (e.code === 'KeyQ') { openAbilityMenu(); return; }
-  if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -691,7 +703,22 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
+document.addEventListener('keyup', e => { heldKeys.delete(e.code); ignoreKeys.delete(e.code); });
+
 restartBtn.addEventListener('click', init);
+
+pauseMenu.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  btn.blur();
+  if (btn.dataset.pause === 'resume') togglePause();
+  else if (btn.dataset.pause === 'restart') init();
+  else {
+    pauseControls.hidden = !pauseControls.hidden;
+    btn.setAttribute('aria-expanded', String(!pauseControls.hidden));
+  }
+});
+startLevelSelect.addEventListener('change', () => startLevelSelect.blur());
 
 modeSelect.addEventListener('change', () => {
   modeSelect.blur(); // evita que las flechas/Space sigan cambiando el modo
