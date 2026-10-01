@@ -23,6 +23,18 @@
     <div class="game-container">
       <aside class="panel panel-left">
         <div class="panel-section">
+          <label class="label" for="mode-select">MODO</label>
+          <select id="mode-select">
+            <option value="classic">Clásico</option>
+            <option value="sprint">Sprint: 40 líneas en 2:00</option>
+            <option value="garbage">Basura cada 10s</option>
+            <option value="preset">Bloques pre-colocados</option>
+            <option value="invisible">Piezas invisibles</option>
+            <option value="inverse">Rotación inversa (nivel 5)</option>
+          </select>
+          <span class="hint" id="mode-info"></span>
+        </div>
+        <div class="panel-section">
           <span class="label">HOLD</span>
           <canvas id="hold-canvas" width="120" height="120"></canvas>
         </div>

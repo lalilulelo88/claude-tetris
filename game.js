@@ -24,6 +24,7 @@ const COLORS = [
   '#69f0ae', // gravedad
   '#40c4ff', // congelar
   '#cfd8dc', // comodín
+  '#757575', // basura / bloques pre-colocados
 ];
 
 const PIECES = [
@@ -46,6 +47,7 @@ const PIECES = [
 // 13-17 = power-ups (no se fusionan al tablero); WILD = bloque comodín en el tablero
 const POWER_TYPES = [13, 14, 15, 16, 17];
 const WILD = 18;
+const GARBAGE = 19;
 const POWER_EVERY_LINES = 5;
 const FREEZE_MS = 5000;
 const ICONS = { 13: '💣', 14: '⚡', 15: '🎨', 16: '⬇️', 17: '❄️', 18: '✦' };
@@ -62,6 +64,14 @@ const ENERGY_MAX = 100;
 const ENERGY_PER_LINE = 10;
 const ABILITY_MS = 10000;
 const QUEUE_LEN = 6;
+
+// modos desafío (los values del <select> en index.html)
+const SPRINT_LINES = 40;
+const SPRINT_MS = 120000;
+const GARBAGE_MS = 10000;
+const PRESET_ROWS = 6;
+const REVEAL_MS = 600;
+const INVERSE_LEVEL_BASE = 4;
 // orden = teclas 1-5 del menú
 const ABILITY_KEYS = ['peek', 'swap', 'slow', 'undo', 'hold'];
 
@@ -79,6 +89,8 @@ const peekSection = document.getElementById('peek-section');
 const peekCanvas = document.getElementById('peek-canvas');
 const peekCtx = peekCanvas.getContext('2d');
 const abilityMenu = document.getElementById('ability-menu');
+const modeSelect = document.getElementById('mode-select');
+const modeInfo = document.getElementById('mode-info');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
@@ -93,7 +105,12 @@ const themeColors = { grid: '', highlight: '', accent: '' };
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, freezeLeft;
 let energy, slowLeft, peekLeft, undoSnap;
+let mode, levelBase, timeLeft, garbageLeft, revealLeft;
 let combo, b2b, lastRotate, flash, audioCtx;
+
+function speedFor(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
+}
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -141,7 +158,7 @@ function rotateCW(shape) {
 }
 
 function tryRotate() {
-  const rotated = rotateCW(current.shape);
+  const rotated = mode === 'inverse' ? rotateCW(rotateCW(rotateCW(current.shape))) : rotateCW(current.shape);
   const kicks = [0, -1, 1, -2, 2];
   for (const kick of kicks) {
     if (!collide(rotated, current.x + kick, current.y)) {
@@ -218,11 +235,12 @@ function scoreLock(cleared, tspin) {
     lines += cleared;
     if (Math.floor(lines / POWER_EVERY_LINES) > Math.floor((lines - cleared) / POWER_EVERY_LINES)) queueReward(randomPower());
     energy = Math.min(ENERGY_MAX, energy + cleared * ENERGY_PER_LINE);
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = Math.floor(lines / 10) + 1 + levelBase;
+    dropInterval = speedFor(level);
     beep(300 + 100 * Math.min(combo, 8));
   }
   score += pts;
+  if (mode === 'sprint' && lines >= SPRINT_LINES) endGame('¡VICTORIA!', true);
   if (labels.length) {
     flash = { text: labels.join(' + ') + '  +' + pts, left: FLASH_MS };
     if (labels.length > 1 || tspin) beep(880, 0.2);
@@ -293,6 +311,7 @@ function lockPower() {
 }
 
 function lockPiece() {
+  revealLeft = REVEAL_MS;
   undoSnap = structuredClone({ board, current, queue, score, lines, level, dropInterval, combo, b2b, hold, holdUsed });
   if (POWER_TYPES.includes(current.type)) return lockPower();
   const tspin = isTSpin();
@@ -377,17 +396,20 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
-  // board
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK);
+  // board (en modo invisible solo se ve un instante tras bloquear, o al terminar)
+  if (mode !== 'invisible' || revealLeft > 0 || gameOver)
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        drawBlock(ctx, c, r, board[r][c], BLOCK);
 
-  // ghost
-  const gy = ghostY();
-  for (let r = 0; r < current.shape.length; r++)
-    for (let c = 0; c < current.shape[r].length; c++)
-      if (current.shape[r][c])
-        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
+  // ghost (también delataría el tablero en modo invisible)
+  if (mode !== 'invisible') {
+    const gy = ghostY();
+    for (let r = 0; r < current.shape.length; r++)
+      for (let c = 0; c < current.shape[r].length; c++)
+        if (current.shape[r][c])
+          drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
+  }
 
   // current piece
   for (let r = 0; r < current.shape.length; r++)
@@ -451,6 +473,49 @@ function drawPeek() {
   });
 }
 
+function addGarbageRow() {
+  if (board[0].some(v => v)) { endGame(); return; }
+  board.shift();
+  const hole = Math.floor(Math.random() * COLS);
+  board.push(Array.from({ length: COLS }, (_, c) => (c === hole ? 0 : GARBAGE)));
+  // la pieza en juego sube si la fila nueva le invade el sitio
+  while (collide(current.shape, current.x, current.y) && current.y > -4) current.y--;
+  if (collide(current.shape, current.x, current.y)) endGame();
+}
+
+function fillPreset() {
+  for (let r = ROWS - PRESET_ROWS; r < ROWS; r++) {
+    const hole = Math.floor(Math.random() * COLS);
+    for (let c = 0; c < COLS; c++)
+      if (c !== hole && Math.random() < 0.7) board[r][c] = GARBAGE;
+  }
+}
+
+function updateModeInfo() {
+  const secs = ms => Math.ceil(ms / 1000);
+  if (mode === 'sprint') {
+    const t = secs(timeLeft);
+    modeInfo.textContent = `${lines}/${SPRINT_LINES} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  } else if (mode === 'garbage') {
+    modeInfo.textContent = `Basura en ${secs(garbageLeft)}s`;
+  } else {
+    modeInfo.textContent = '';
+  }
+}
+
+function modeTick(dt) {
+  if (mode === 'sprint') {
+    timeLeft = Math.max(0, timeLeft - dt);
+    if (!timeLeft) endGame('TIEMPO');
+  } else if (mode === 'garbage') {
+    garbageLeft -= dt;
+    if (garbageLeft <= 0) { garbageLeft = GARBAGE_MS; addGarbageRow(); }
+  } else if (mode === 'invisible') {
+    revealLeft = Math.max(0, revealLeft - dt);
+  }
+  updateModeInfo();
+}
+
 function openAbilityMenu() {
   if (energy < ENERGY_MAX || paused || gameOver) return;
   paused = true;
@@ -501,10 +566,12 @@ function chooseAbility(name) {
   closeAbilityMenu();
 }
 
-function endGame() {
+function endGame(title = 'GAME OVER', win = false) {
+  if (gameOver) return;
   gameOver = true;
   cancelAnimationFrame(animId);
-  overlayTitle.textContent = 'GAME OVER';
+  overlayTitle.textContent = title;
+  overlayTitle.classList.toggle('win', win);
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
 }
@@ -529,6 +596,8 @@ function loop(ts) {
   if (freezeLeft > 0) freezeLeft = Math.max(0, freezeLeft - dt);
   else dropAccum += dt;
   if (slowLeft > 0) slowLeft = Math.max(0, slowLeft - dt);
+  modeTick(dt);
+  if (gameOver) { draw(); return; }
   const showPeek = peekLeft > 0;
   if (showPeek) { peekLeft = Math.max(0, peekLeft - dt); drawPeek(); }
   peekSection.hidden = !showPeek;
@@ -547,13 +616,19 @@ function loop(ts) {
 }
 
 function init() {
+  mode = modeSelect.value;
+  levelBase = mode === 'inverse' ? INVERSE_LEVEL_BASE : 0;
+  timeLeft = SPRINT_MS;
+  garbageLeft = GARBAGE_MS;
+  revealLeft = 0;
   board = createBoard();
+  if (mode === 'preset') fillPreset();
   score = 0;
   lines = 0;
-  level = 1;
+  level = 1 + levelBase;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = speedFor(level);
   dropAccum = 0;
   hold = null;
   freezeLeft = 0;
@@ -571,7 +646,9 @@ function init() {
   updateHUD();
   overlay.classList.add('hidden');
   abilityMenu.classList.add('hidden');
+  overlayTitle.classList.remove('win');
   peekSection.hidden = true;
+  updateModeInfo();
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -615,6 +692,15 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', init);
+
+modeSelect.addEventListener('change', () => {
+  modeSelect.blur(); // evita que las flechas/Space sigan cambiando el modo
+  init();
+});
+// flechas/Space son del juego, no del <select>
+modeSelect.addEventListener('keydown', e => {
+  if (e.key.startsWith('Arrow') || e.code === 'Space') { e.preventDefault(); modeSelect.blur(); }
+});
 
 abilityMenu.addEventListener('click', e => {
   const btn = e.target.closest('button');

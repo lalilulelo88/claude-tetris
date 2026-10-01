@@ -227,6 +227,23 @@ kbd {
   transition: width 0.2s;
 }
 
+#peek-canvas {
+  align-self: flex-start;
+}
+
+#mode-select {
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 12px;
+}
+
+#overlay-title.win {
+  color: var(--accent);
+}
+
 .hint {
   font-size: 11px;
   color: var(--accent);
