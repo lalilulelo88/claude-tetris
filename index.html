@@ -104,10 +104,17 @@
         <div class="overlay-box">
           <p id="overlay-title">GAME OVER</p>
           <p id="overlay-score"></p>
+          <form id="name-form" class="name-form" hidden>
+            <input id="name-input" maxlength="12" placeholder="Tu nombre" autocomplete="off" aria-label="Nombre" />
+            <button type="submit" class="small-btn">Guardar</button>
+          </form>
+          <div id="overlay-records" class="records" hidden></div>
           <button id="restart-btn">Reiniciar</button>
         </div>
       </div>
     </div>
+
+    <section id="records" class="records"></section>
   </div>
 
   <script src="game.js"></script>
