@@ -231,7 +231,8 @@ kbd {
   align-self: flex-start;
 }
 
-#mode-select {
+#mode-select,
+#skin-select {
   background: var(--kbd-bg);
   color: var(--text);
   border: 1px solid var(--kbd-border);
@@ -387,4 +388,12 @@ kbd {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* Neón fuerza fondo negro en los canvas (ambos temas) */
+[data-skin="neon"] #board,
+[data-skin="neon"] #hold-canvas,
+[data-skin="neon"] #peek-canvas,
+[data-skin="neon"] #next-canvas {
+  background: #000;
 }
