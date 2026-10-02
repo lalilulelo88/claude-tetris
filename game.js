@@ -110,7 +110,7 @@ let hold, holdUsed, freezeLeft;
 let energy, slowLeft, peekLeft, undoSnap;
 let startLevel = 1;
 let mode, levelBase, timeLeft, garbageLeft, revealLeft;
-let combo, b2b, lastRotate, flash, audioCtx;
+let maxCombo = 0, combo, b2b, lastRotate, flash, audioCtx;
 
 function speedFor(lvl) {
   return Math.max(100, 1000 - (lvl - 1) * 90);
@@ -234,6 +234,7 @@ function scoreLock(cleared, tspin) {
     if (difficult && b2b) { pts = Math.floor(pts * 1.5); labels.push('B2B'); }
     b2b = difficult;
     combo++;
+    maxCombo = Math.max(maxCombo, combo);
     if (combo >= 2) { pts *= combo; labels.push('COMBO x' + combo); }
     if (board.every(row => row.every(v => !v))) { pts += PERFECT_CLEAR * level; labels.push('PERFECT CLEAR'); }
     lines += cleared;
@@ -577,7 +578,17 @@ function endGame(title = 'GAME OVER', win = false) {
   overlayTitle.textContent = title;
   overlayTitle.classList.toggle('win', win);
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  const r = loadRecords();
+  r.combo = Math.max(r.combo, maxCombo);
+  r.lines = Math.max(r.lines, lines);
+  pendingRank = score > 0 && (r.top.length < TOP_N || score > r.top[TOP_N - 1].score) ? score : null;
+  saveRecords(r);
+  nameForm.hidden = pendingRank === null;
+  nameInput.value = '';
+  renderRecords(overlayRecords, -1);
+  overlayRecords.hidden = false;
   overlay.classList.remove('hidden');
+  if (pendingRank !== null) nameInput.focus();
 }
 
 function openPauseMenu() {
@@ -595,6 +606,84 @@ function closePauseMenu() {
   lastTime = performance.now();
   loop(lastTime);
 }
+
+// ---- Records (localStorage) ----
+const TOP_N = 5, REC_KEY = 'tetris-records';
+const recordsEl = document.getElementById('records');
+const overlayRecords = document.getElementById('overlay-records');
+const nameForm = document.getElementById('name-form');
+const nameInput = document.getElementById('name-input');
+let pendingRank = null;
+
+function loadRecords() {
+  const r = { top: [], combo: 0, lines: 0 };
+  try {
+    const d = JSON.parse(localStorage.getItem(REC_KEY));
+    const n = v => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+    if (d && Array.isArray(d.top)) {
+      r.top = d.top
+        .filter(e => e && Number.isFinite(e.score) && e.score > 0)
+        .map(e => ({ name: String(e.name ?? '').slice(0, 12) || 'Anónimo', score: Math.floor(e.score) }))
+        .sort((a, b) => b.score - a.score).slice(0, TOP_N);
+    }
+    if (d) { r.combo = n(d.combo); r.lines = n(d.lines); }
+  } catch (e) {}
+  return r;
+}
+
+function saveRecords(r) {
+  try { localStorage.setItem(REC_KEY, JSON.stringify(r)); } catch (e) {}
+  renderRecords(recordsEl, -1);
+}
+
+function renderRecords(el, hi) {
+  const r = loadRecords();
+  el.replaceChildren();
+  const h = document.createElement('span');
+  h.className = 'label';
+  h.textContent = 'RECORDS';
+  const ol = document.createElement('ol');
+  for (let i = 0; i < TOP_N; i++) {
+    const li = document.createElement('li');
+    const e = r.top[i];
+    li.textContent = e ? `${e.name} - ${e.score.toLocaleString()}` : '-';
+    if (i === hi) li.className = 'hl';
+    ol.append(li);
+  }
+  const st = document.createElement('p');
+  st.className = 'hint';
+  st.textContent = `Mejor combo: x${r.combo} · Líneas máx: ${r.lines}`;
+  el.append(h, ol, st);
+  if (el === recordsEl) {
+    const b = document.createElement('button');
+    b.className = 'small-btn';
+    b.textContent = 'Resetear records';
+    b.addEventListener('click', () => {
+      if (!confirm('¿Borrar todos los records?')) return;
+      try { localStorage.removeItem(REC_KEY); } catch (e) {}
+      renderRecords(recordsEl, -1);
+      if (gameOver) renderRecords(overlayRecords, -1);
+    });
+    el.append(b);
+  }
+}
+
+nameForm.addEventListener('submit', e => {
+  e.preventDefault();
+  if (pendingRank === null) return;
+  const r = loadRecords();
+  const name = nameInput.value.trim().slice(0, 12) || 'Anónimo';
+  r.top.push({ name, score: pendingRank });
+  r.top.sort((a, b) => b.score - a.score);
+  const idx = r.top.findIndex(x => x.name === name && x.score === pendingRank);
+  r.top = r.top.slice(0, TOP_N);
+  pendingRank = null;
+  nameForm.hidden = true;
+  saveRecords(r);
+  renderRecords(overlayRecords, idx);
+  restartBtn.focus();
+});
+renderRecords(recordsEl, -1);
 
 function loop(ts) {
   const dt = ts - lastTime;
@@ -643,6 +732,7 @@ function init() {
   peekLeft = 0;
   undoSnap = null;
   combo = 0;
+  maxCombo = 0;
   b2b = false;
   lastRotate = false;
   flash = null;
@@ -651,6 +741,7 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  document.activeElement.blur();
   abilityMenu.classList.add('hidden');
   pauseMenu.classList.add('hidden');
   overlayTitle.classList.remove('win');
@@ -661,6 +752,7 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (e.target === nameInput) return;
   if (!audioCtx) try { audioCtx = new AudioContext(); } catch (err) {}
   if (!abilityMenu.classList.contains('hidden')) {
     const i = Number(e.key) - 1;
