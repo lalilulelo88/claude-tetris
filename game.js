@@ -89,6 +89,9 @@ const peekSection = document.getElementById('peek-section');
 const peekCanvas = document.getElementById('peek-canvas');
 const peekCtx = peekCanvas.getContext('2d');
 const abilityMenu = document.getElementById('ability-menu');
+const pauseMenu = document.getElementById('pause-menu');
+const startLevelSelect = document.getElementById('start-level');
+const pauseControls = document.getElementById('pause-controls');
 const modeSelect = document.getElementById('mode-select');
 const modeInfo = document.getElementById('mode-info');
 const overlay = document.getElementById('overlay');
@@ -105,6 +108,7 @@ const themeColors = { grid: '', highlight: '', accent: '' };
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, freezeLeft;
 let energy, slowLeft, peekLeft, undoSnap;
+let startLevel = 1;
 let mode, levelBase, timeLeft, garbageLeft, revealLeft;
 let combo, b2b, lastRotate, flash, audioCtx;
 
@@ -235,7 +239,7 @@ function scoreLock(cleared, tspin) {
     lines += cleared;
     if (Math.floor(lines / POWER_EVERY_LINES) > Math.floor((lines - cleared) / POWER_EVERY_LINES)) queueReward(randomPower());
     energy = Math.min(ENERGY_MAX, energy + cleared * ENERGY_PER_LINE);
-    level = Math.floor(lines / 10) + 1 + levelBase;
+    level = Math.floor(lines / 10) + startLevel + levelBase;
     dropInterval = speedFor(level);
     beep(300 + 100 * Math.min(combo, 8));
   }
@@ -576,18 +580,20 @@ function endGame(title = 'GAME OVER', win = false) {
   overlay.classList.remove('hidden');
 }
 
-function togglePause() {
-  if (gameOver) return;
-  paused = !paused;
-  if (!paused) {
-    lastTime = performance.now();
-    loop(lastTime);
-  } else {
-    cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
-  }
+function openPauseMenu() {
+  if (paused || gameOver) return;
+  paused = true;
+  cancelAnimationFrame(animId);
+  pauseControls.hidden = true;
+  startLevelSelect.value = startLevel;
+  pauseMenu.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  pauseMenu.classList.add('hidden');
+  paused = false;
+  lastTime = performance.now();
+  loop(lastTime);
 }
 
 function loop(ts) {
@@ -625,7 +631,7 @@ function init() {
   if (mode === 'preset') fillPreset();
   score = 0;
   lines = 0;
-  level = 1 + levelBase;
+  level = startLevel + levelBase;
   paused = false;
   gameOver = false;
   dropInterval = speedFor(level);
@@ -646,6 +652,7 @@ function init() {
   updateHUD();
   overlay.classList.add('hidden');
   abilityMenu.classList.add('hidden');
+  pauseMenu.classList.add('hidden');
   overlayTitle.classList.remove('win');
   peekSection.hidden = true;
   updateModeInfo();
@@ -662,7 +669,11 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyQ') { openAbilityMenu(); return; }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (!pauseMenu.classList.contains('hidden')) {
+    if (e.code === 'Escape' || e.code === 'KeyP') closePauseMenu();
+    return;
+  }
+  if (e.code === 'KeyP' || e.code === 'Escape') { openPauseMenu(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -708,6 +719,20 @@ abilityMenu.addEventListener('click', e => {
   btn.blur();
   if (btn.dataset.ability) chooseAbility(btn.dataset.ability);
   else closeAbilityMenu();
+});
+
+pauseMenu.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  btn.blur();
+  if (btn.dataset.action === 'resume') closePauseMenu();
+  else if (btn.dataset.action === 'restart') init();
+  else if (btn.dataset.action === 'controls') pauseControls.hidden = !pauseControls.hidden;
+});
+
+startLevelSelect.addEventListener('change', () => {
+  startLevel = Number(startLevelSelect.value);
+  startLevelSelect.blur();
 });
 
 function applyTheme(theme) {

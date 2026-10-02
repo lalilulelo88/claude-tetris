@@ -315,3 +315,41 @@ kbd {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* ---- Menú de pausa ---- */
+#pause-controls {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#pause-controls[hidden] {
+  display: none;
+}
+
+#pause-controls li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pause-level {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+#start-level {
+  background: var(--kbd-bg);
+  color: var(--text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 12px;
+}
