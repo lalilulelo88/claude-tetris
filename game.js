@@ -356,17 +356,88 @@ function updateHUD() {
   energyHint.textContent = energy >= ENERGY_MAX ? '¡Lista! Pulsa Q' : '';
 }
 
+// paletas por skin (mismos índices que COLORS); pastel mezcla cada color con blanco
+const mixWhite = hex => '#' + [1, 3, 5].map(i =>
+  Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.55 + 255 * 0.45).toString(16).padStart(2, '0')).join('');
+const PALETTES = {
+  retro: COLORS,
+  neon: COLORS,
+  pastel: COLORS.map(c => c && mixWhite(c)),
+  pixel: COLORS,
+};
+const SKIN_KEY = 'skin';
+let skin = 'retro';
+try {
+  const saved = localStorage.getItem(SKIN_KEY);
+  if (Object.hasOwn(PALETTES, saved)) skin = saved;
+} catch (e) {}
+
+function roundRect(context, x, y, w, h, r) {
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
+}
+
+// cada skin dibuja un bloque en (px, py) con lado s
+const SKIN_DRAW = {
+  retro(context, px, py, s, color) {
+    context.fillStyle = color;
+    context.fillRect(px + 1, py + 1, s - 2, s - 2);
+    context.fillStyle = themeColors.highlight;
+    context.fillRect(px + 1, py + 1, s - 2, 4);
+  },
+  neon(context, px, py, s, color) {
+    context.shadowColor = color;
+    context.shadowBlur = s * 0.4;
+    context.fillStyle = '#000';
+    context.fillRect(px + 2, py + 2, s - 4, s - 4);
+    context.strokeStyle = color;
+    context.lineWidth = 2;
+    context.strokeRect(px + 2.5, py + 2.5, s - 5, s - 5);
+    context.shadowBlur = 0;
+    context.shadowColor = 'transparent';
+    context.fillStyle = color;
+    context.globalAlpha *= 0.35;
+    context.fillRect(px + 4, py + 4, s - 8, s - 8);
+  },
+  pastel(context, px, py, s, color) {
+    context.fillStyle = color;
+    roundRect(context, px + 1.5, py + 1.5, s - 3, s - 3, s * 0.3);
+    context.fill();
+    context.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    roundRect(context, px + s * 0.2, py + s * 0.14, s * 0.6, s * 0.16, s * 0.08);
+    context.fill();
+  },
+  pixel(context, px, py, s, color) {
+    const u = Math.max(2, Math.round(s / 6)); // "píxel" del bloque
+    context.fillStyle = color;
+    context.fillRect(px, py, s, s);
+    context.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    for (let i = 0; i * u < s; i++)
+      for (let j = 0; j * u < s; j++)
+        if ((i + j) % 2) context.fillRect(px + i * u, py + j * u, u, u);
+    const e = u / 2 + 1;
+    context.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    context.fillRect(px, py, s, e);
+    context.fillRect(px, py, e, s);
+    context.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    context.fillRect(px, py + s - e, s, e);
+    context.fillRect(px + s - e, py, e, s);
+  },
+};
+
+// única función de dibujo de bloque: despacha según la skin activa
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = themeColors.highlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  SKIN_DRAW[skin](context, x * size, y * size, size, PALETTES[skin][colorIndex]);
+  context.globalAlpha = alpha ?? 1;
   if (ICONS[colorIndex]) {
-    context.fillStyle = '#000';
+    context.fillStyle = skin === 'neon' ? '#fff' : '#000';
     context.font = `${Math.floor(size * 0.6)}px sans-serif`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
@@ -376,7 +447,7 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
 }
 
 function drawGrid() {
-  ctx.strokeStyle = themeColors.grid;
+  ctx.strokeStyle = skin === 'neon' ? 'rgba(255, 255, 255, 0.12)' : themeColors.grid;
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -419,7 +490,7 @@ function draw() {
   if (freezeLeft > 0) {
     ctx.fillStyle = 'rgba(64, 196, 255, 0.12)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = COLORS[17];
+    ctx.fillStyle = PALETTES[skin][17];
     ctx.font = "bold 14px 'Courier New', monospace";
     ctx.textAlign = 'left';
     ctx.fillText('❄ ' + (freezeLeft / 1000).toFixed(1) + 's', 6, 18);
@@ -710,6 +781,28 @@ abilityMenu.addEventListener('click', e => {
   else closeAbilityMenu();
 });
 
+const skinSelect = document.getElementById('skin-select');
+function applySkin(name) {
+  skin = name;
+  document.documentElement.dataset.skin = name;
+  skinSelect.value = name;
+  // el loop está cancelado en pausa/game over: repintar manualmente
+  if (current) {
+    draw();
+    drawNext();
+    drawHold();
+    if (peekLeft > 0) drawPeek();
+  }
+}
+skinSelect.addEventListener('change', () => {
+  try { localStorage.setItem(SKIN_KEY, skinSelect.value); } catch (e) {}
+  applySkin(skinSelect.value);
+  skinSelect.blur(); // evita que las flechas/Space sigan cambiando la skin
+});
+skinSelect.addEventListener('keydown', e => {
+  if (e.key.startsWith('Arrow') || e.code === 'Space') { e.preventDefault(); skinSelect.blur(); }
+});
+
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   themeToggle.setAttribute('aria-checked', String(theme === 'light'));
@@ -734,4 +827,5 @@ themeToggle.addEventListener('click', () => {
 
 applyTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 
+applySkin(skin);
 init();
